@@ -1,0 +1,235 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+
+* * *
+
+## Part 1: Data
+BRFSS data is collected from over 400,000 phone interviews of adults in the 50 states, the District of Columbia, and three U.S. territories. Respondents are selected via random digit dialing of both landlines and cellphones.
+
+The questionnaire consists of standardized core questions and optional modules that states select. This means that data are not available for all 50 states for all questions. 
+
+Because respondents are randomly selected, the data from the core questions are generalizable to the United States. Data from optional modules are generalizable only to the states that implemented them. 
+
+Because this data provides a snapshot, or point in time, it cannot be used to establish causality. 
+
+Sources: https://www.cdc.gov/brfss/about/index.htm and https://www.cdc.gov/brfss/about/brfss_faq.htm 
+* * *
+
+## Part 2: Research questions
+
+**Research question 1:**
+Is worry about having enough money to buy nutritious food associated with vegetable intake, defined by total vegetables consumed per day? 
+
+This research question has implications for nutrition policy - if there is an association, that may indicate a need for additional food assistance so that people can have a healthy diet.
+
+**Research question 2:**
+Among pregnant women, are Black women less likely than women of other races to have received a flu shot in the last 12 months?
+
+Having the flu during pregnancy can lead to bad birth outcomes such as premature birth and low birth weight. These outcomes are more common for Black babies. If an association exists, it points to an opportunity to improve health equity by increasing the uptake of flu shots among Black expectant mothers. 
+
+Sources:
+
+Dawood, Fatimah S., et al., "Incidence of influenza during pregnancy and association with pregnancy and perinatal outcomes in three middle-income countries: a multisite prospective longitudinal cohort study."  The Lancet Infectious Diseases 21 (1):97-106. doi: 10.1016/S1473-3099(20)30592-2.
+
+March of Dimes, "Peristats," accessed February 10, 2022, https://www.marchofdimes.org/Peristats. 
+
+**Research question 3:**
+Is race or ethnicity associated with a belief that mental health treatment can help people lead a normal life? Does this association change based on gender?
+
+This research question is important because if an association does exist, that indicates that the behavioral health system should make further study to understand these differences and make changes to how care is provided based on that information. 
+
+This research question will be limited to the states that included the Mental Illness & Stigma module in 2013 (Colorado, Minnesota, Nevada, Tennessee, and Washington )
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+NOTE: Insert code chunks as needed by clicking on the "Insert a new code chunk" 
+button (green button with orange arrow) above. Make sure that your code is visible
+in the project you submit. Delete this note when before you submit your work.
+
+**Research question 1:**
+
+**Is worry about having enough money to buy nutritious food associated with vegetable intake, defined by total vegetables consumed per day?** 
+
+```{r}
+brfss2013 %>%
+  filter (scntmeal !="NA") %>% 
+  group_by(scntmeal) %>%
+  summarise(count = n())
+
+
+brfss2013 %>%
+  filter(!is.na(scntmeal)) %>%
+  ggplot(aes(x=scntmeal, fill=scntmeal))+
+  geom_bar()
+
+           
+
+
+```
+
+The summary table and bar charts for scntmeal display the counts of responses to the question "Times Past 12 months worried/stressed about having enough money to buy nutritious food." It shows that the majority of respondents were never worried about this issue.  
+
+Note that there were a large number of "NA" responses because this question was from an optional module. In this EDA I have filtered those responses out. 
+
+```{r}
+brfss2013 %>%
+  filter(!(is.na(X_vegesum))) %>%
+  summarise(vegmean = mean (X_vegesum), vegmedian = median (X_vegesum), vegsd = sd(X_vegesum), vegmin = min(X_vegesum), vegmax = max(X_vegesum))
+```
+This is an unexpected result. It is not reasonable to think that the median number of vegetables consumed per day is 165. However, looking more closely at the codebook, one finds that this variable has two implied decimal places. That means that the mean is actually 1.90, the median is 1.65, etc. 
+
+We can mutate the variable and re-summarize the data to get these results. 
+
+```{r}
+brfss2013 <- brfss2013 %>%
+  mutate(vegesum = X_vegesum/100)
+
+brfss2013 %>%
+  filter(!(is.na(X_vegesum))) %>%
+  summarise(vegmean = mean (vegesum), vegmedian = median (vegesum), vegsd = sd(vegesum), vegmin = min(vegesum), vegmax = max(vegesum))
+
+```
+These results make more sense. 
+
+Finally, let's see what vegetable consumption looks like across the different responses to the question about nutritious food. 
+
+```{r}
+brfss2013 %>%
+  filter(!is.na(scntmeal)) %>%
+  ggplot(aes(x=scntmeal, y=vegesum))+
+  geom_boxplot()+
+  coord_flip()
+```
+
+This box plot shows that there is not much variation around the center depending on worries about nutritious food, but there is variation in the distribution. The data for those who are never or rarely worried shows a greater right skew than for those that are sometimes, usually, or always worried.
+
+**Research question 2:**
+
+**Among pregnant women, are Black women less likely than women of other races to have received a flu shot in the last 12 months?**
+
+First, let's look at the flu shot data.
+
+```{r}
+brfss2013 %>%
+  group_by(flushot6) %>%
+  summarise(count = n())
+```
+Fewer respondents had received a flu shot in the last 12 months than had received one. Also, note the number of NA responses. Based on the codebook, these NAs include don't know/not sure, refused, and missing responses. 
+
+The next step is to understand the demographics of pregnant women in the sample.To do so, we could create a new variable that combines race and pregnancy status, but we haven't learned how to do that yet. Instead, we can create a demographic table that filters based on pregnancy. 
+
+```{r}
+brfss2013 %>% 
+  filter (pregnant == "Yes")%>%
+  group_by (X_imprace) %>%
+  summarise (count = n())
+
+```
+This is telling us something important about our data - for some racial and ethnic groups, there may be too few pregnant respondents to generalize from this sample. We'll be able to evaluate that when we learn about statistical power. 
+
+Finally, let's look at whether pregnant respondents have received a flu shot in the last year, by race. A crosstab would be perfect, but again, that's something we haven't learned yet. A segmented bar chart will also provide insights. 
+
+```{r}
+brfss2013 %>%
+  filter(pregnant == "Yes") %>%
+  filter(!is.na(flushot6)) %>%
+  ggplot(aes(x = X_imprace, fill = flushot6))+
+  geom_bar(position = "fill")+
+  labs(y="Proportion")+
+  coord_flip()
+```
+This chart shows that there are different rates flu vaccination among different race/ethnic groups. Most relevant to our research question, Black pregnant respondents are the least likely to say they have received a flu shot in the last 12 months. 
+
+**Research question 3:**
+
+**Is race or ethnicity associated with a belief that mental health treatment can help people lead a normal life? Does this association change based on gender?**
+
+For this question, we can use similar methods as the previous one, but we're adding an additional layer of analysis. We'll start by looking at the overall responses to the question about whether mental health treatment can help people lead a normal life. 
+
+```{r}
+brfss2013 %>%
+  group_by(mistrhlp)%>%
+  summarise (count= n())
+```
+
+Most respondents agree that mental health can help - either strongly or slightly. We could simplify our analysis by combining the two agree categories, and the two disagree categories. However, it appears that the best way to do this is by using a package "forcats." So we have to install and load it. We can then simplify this variable and work with it going forward. 
+
+```{r}
+library(forcats)
+
+```
+```{r}
+brfss2013 <- brfss2013 %>%
+  mutate(mistrhlpsimple = fct_collapse(mistrhlp,
+                                        "Agree" = c("Agree strongly", "Agree slightly"),
+                                        "Disagree" = c("Disagree slightly", "Disagree strongly"),
+                                        "Neither" = c("Neither agree nor disagree")))
+
+brfss2013 %>%
+  group_by(mistrhlpsimple)%>%
+  summarise (count= n())
+```
+Looking at this table helps us check our work - the agree and disagree rows added appropriately. Now we can look at the belief in the helpfulness of mental health treatment by race and ethnicity. 
+
+```{r}
+brfss2013 %>%
+  filter(!is.na(mistrhlpsimple)) %>%
+  ggplot(aes(x = X_imprace, fill = mistrhlpsimple))+
+  geom_bar(position = "fill")+
+  labs(y="Proportion")+
+  coord_flip()
+
+```
+We can see that while the majority of respondents of all racial and ethic groups agree that mental health treatment is helpful, there is some variation by race. White, Non-Hispanic respondents were the least likely to disagree, while Black, Non-Hispanic respondents were more doubtful about it's utility - though other racial and ethnic groups had higher rates of disagreement. 
+
+Again, this would be easier to quantify in a crosstab. 
+
+Now we can add gender. It looks like there are some packages that can help us do a stacked and grouped bar chart, but that's a bit too complicated for the moment. Instead, let's duplicate the previous bar chart, but create two, filtered by gender. 
+
+```{r}
+brfss2013 %>%
+  filter(!is.na(mistrhlpsimple)) %>%
+  filter(!is.na(X_imprace)) %>%
+  filter(sex=="Female") %>%
+  ggplot(aes(x = X_imprace, fill = mistrhlpsimple))+
+  geom_bar(position = "fill")+
+  labs(y="Proportion")+
+  coord_flip()+
+  ggtitle("Female")
+  
+brfss2013 %>%
+  filter(!is.na(mistrhlpsimple)) %>%
+  filter(!is.na(X_imprace)) %>%
+  filter(sex=="Male") %>%
+  ggplot(aes(x = X_imprace, fill = mistrhlpsimple))+
+  geom_bar(position = "fill")+
+  labs(y="Proportion")+
+  coord_flip()+
+  ggtitle("Male")
+  
+```
+
+It looks like, across racial and ethnic groups, men are less likely than women to believe that mental health treatment is helpful. Additional analysis will be required to see how meaningful these differences are. 
